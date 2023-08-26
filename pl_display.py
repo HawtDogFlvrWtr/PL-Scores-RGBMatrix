@@ -22,17 +22,29 @@ options.hardware_mapping = 'regular'  # If you have an Adafruit HAT: 'adafruit-h
 
 matrix = RGBMatrix(options = options)
 
+def play_gif(gif_file, x, y):
+    goal_gif = Image.open(gif_file)
+    for frame in range(0, goal_gif.n_frames):
+        goal_gif.seek(frame)
+        resized_gif = goal_gif.resize((x,y))
+        matrix.SetImage(resized_gif.convert('RGB'))
+        time.sleep(0.01)
+
+play_gif("pl.gif", 64, 64)
+
+
 white = graphics.Color(255, 255, 255)
 gray = graphics.Color(192, 192, 192)
 red = graphics.Color(241, 65, 108)
 green = graphics.Color(80, 205, 137)
 blue = graphics.Color(0, 163, 255)
 font = graphics.Font()
-font.LoadFont("/opt/OTD-RGB-Matrix/fonts/9x18B.bdf")
+font.LoadFont("/opt/PL-Scores-RGBMatrix/fonts/9x18B.bdf")
 date_font = graphics.Font()
-date_font.LoadFont("/opt/OTD-RGB-Matrix/fonts/5x8.bdf")
+date_font.LoadFont("/opt/PL-Scores-RGBMatrix/fonts/5x8.bdf")
+
 def download_image(save_path, team_id):
-    svg_save_path = 'team_logos/%s.svg' % team_id
+    svg_save_path = '/opt/PL-Scores-RGBMatrix/team_logos/%s.svg' % team_id
     image_url = 'https://resources.premierleague.com/premierleague/badges/rb/%s.svg' % team_id
     headers = {'Origin':'https://www.premierleague.com', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.67 Safari/537.36'}
     r = requests.get(image_url, allow_redirects=True, headers=headers)
@@ -50,13 +62,11 @@ try:
       canvas_off.Clear()
       result = requests.get(url, headers=headers)
       json = result.json()
-      print(json)
       team_scores = []
       for content in json['content']:
         status = content['status']
         phase = content['phase']
-   #     if status == "U": # Don't show games that haven't started yet
-   #         continue
+
         # HOME TEAM
         home_abbr_name = content['teams'][0]['team']['club']['abbr']
         home_alt_id = content['teams'][0]['team']['altIds']['opta']
@@ -64,7 +74,7 @@ try:
             home_score = None
         else:
             home_score = int(content['teams'][0]['score'])
-        home_image_path = 'team_logos/%s.png' % home_alt_id
+        home_image_path = '/opt/PL-Scores-RGBMatrix/team_logos/%s.png' % home_alt_id
         if not os.path.isfile(home_image_path):
             download_image(home_image_path, home_alt_id)
 
@@ -75,7 +85,7 @@ try:
             away_score = None
         else:
             away_score = int(content['teams'][1]['score'])
-        away_image_path = 'team_logos/%s.png' % away_alt_id
+        away_image_path = '/opt/PL-Scores-RGBMatrix/team_logos/%s.png' % away_alt_id
         if not os.path.isfile(away_image_path):
             download_image(away_image_path, away_alt_id)
         if 'clock' not in content:
@@ -115,11 +125,15 @@ try:
           kickoff = scores['kickoff']
           # Home Image
           home_image = Image.open(scores['home_image'])
+          home_background = Image.new("RGBA", home_image.size, "WHITE")
+          home_background.paste(home_image, (0,0), home_image)
           home_resize = home_image.resize((image_x,image_y))
           matrix.SetImage(home_resize.convert('RGB'), 0, 0)
 
           # Away Image
           away_image = Image.open(scores['away_image'])
+          away_background = Image.new("RGBA", away_image.size, "WHITE")
+          away_background.paste(away_image, (0,0), away_image)
           away_resize = away_image.resize((image_x,image_y))
           matrix.SetImage(away_resize.convert('RGB'), 32, 0)
    
