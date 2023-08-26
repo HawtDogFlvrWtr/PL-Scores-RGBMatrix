@@ -1,0 +1,11 @@
+[Unit]
+Description=Premier League RGB Matrix Display
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/PL-Scores-RGBMatrix/pl_display.py
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
