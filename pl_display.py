@@ -22,6 +22,15 @@ options.hardware_mapping = 'regular'  # If you have an Adafruit HAT: 'adafruit-h
 
 matrix = RGBMatrix(options = options)
 
+def download_image(save_path, team_id):
+    svg_save_path = '/opt/PL-Scores-RGBMatrix/team_logos/%s.svg' % team_id
+    image_url = 'https://resources.premierleague.com/premierleague/badges/rb/%s.svg' % team_id
+    headers = {'Origin':'https://www.premierleague.com', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.67 Safari/537.36'}
+    r = requests.get(image_url, allow_redirects=True, headers=headers)
+    open(svg_save_path, 'wb').write(r.content)
+    svg_read = '\n'.join(open(svg_save_path, 'r').readlines())
+    svg2png(bytestring=svg_read, write_to=save_path)
+
 def play_gif(gif_file, x, y):
     goal_gif = Image.open(gif_file)
     for frame in range(0, goal_gif.n_frames):
@@ -30,7 +39,7 @@ def play_gif(gif_file, x, y):
         matrix.SetImage(resized_gif.convert('RGB'))
         time.sleep(0.01)
 
-play_gif("pl.gif", 64, 64)
+play_gif("/opt/PL-Scores-RGBMatrix/pl.gif", 64, 64)
 
 
 white = graphics.Color(255, 255, 255)
@@ -43,27 +52,21 @@ font.LoadFont("/opt/PL-Scores-RGBMatrix/fonts/9x18B.bdf")
 date_font = graphics.Font()
 date_font.LoadFont("/opt/PL-Scores-RGBMatrix/fonts/5x8.bdf")
 
-def download_image(save_path, team_id):
-    svg_save_path = '/opt/PL-Scores-RGBMatrix/team_logos/%s.svg' % team_id
-    image_url = 'https://resources.premierleague.com/premierleague/badges/rb/%s.svg' % team_id
-    headers = {'Origin':'https://www.premierleague.com', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.67 Safari/537.36'}
-    r = requests.get(image_url, allow_redirects=True, headers=headers)
-    open(svg_save_path, 'wb').write(r.content)
-    svg_read = '\n'.join(open(svg_save_path, 'r').readlines())
-    svg2png(bytestring=svg_read, write_to=save_path)
-
 
 try:
     print("Press CTRL-C to stop.")
     canvas_off = matrix.CreateFrameCanvas()
     url ='https://footballapi.pulselive.com/football/fixtures?statuses=U,L,C&pageSize=10&page=0&gameweeks=12271&altIds=true'
     headers = {'Origin':'https://www.premierleague.com', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.67 Safari/537.36'}
+    old_goal_time = {}
+    first_run = True
     while True:
       canvas_off.Clear()
       result = requests.get(url, headers=headers)
       json = result.json()
       team_scores = []
       for content in json['content']:
+        goal_seconds = []
         status = content['status']
         phase = content['phase']
 
@@ -94,12 +97,16 @@ try:
         else:
             clock_label = content['clock']['label']
             clock_secs = content['clock']['secs']
+        for goal in content['goals']:
+            goal_seconds.append(goal['clock']['secs'])
 
         team_scores.append(
             { 
+                'id': int(content['id']),
                 'kickoff': int(content['kickoff']['millis'] / 1000),
-                'status' : status,
-                'phase' : phase,
+                'status': status,
+                'phase': phase,
+                'goal_times': goal_seconds,
                 'home_abbr_name': home_abbr_name,
                 'away_abbr_name': away_abbr_name,
                 'home_image': home_image_path,
@@ -110,7 +117,6 @@ try:
                 'clock_secs' : clock_secs
             }
         )
-      print(team_scores)
       if result.status_code != 200:
         time.sleep(60)
         continue
@@ -119,6 +125,18 @@ try:
       image_x = 32
       image_y = 32
       for scores in team_scores:
+          if first_run == False: # IF first run, don't
+              if scores['goal_times']:
+                if scores['id'] in old_goal_time:
+                    if max(scores['goal_times']) > old_goal_time[scores['id']]:
+                      play_gif("/opt/PL-Scores-RGBMatrix/goal2.gif", 64, 64)
+                      old_goal_time[scores['id']] = max(scores['goal_times'])
+                else:
+                    old_goal_time[scores['id']] = max(scores['goal_times'])
+                    play_gif("/opt/PL-Scores-RGBMatrix/goal2.gif", 64, 64)
+          else:
+              if scores['goal_times']:
+                  old_goal_time[scores['id']] = max(scores['goal_times'])
           matrix.Clear()
           score_string = ''
           score_status = ''
@@ -164,7 +182,7 @@ try:
           graphics.DrawText(matrix, date_font, 32-(5 * (status_length / 2)), 63, gray, score_status)
           time.sleep(5)
 
-      #canvases.append(canvas)
+      first_run = False
       canvas_off = matrix.SwapOnVSync(canvas_off)
 except KeyboardInterrupt:
   sys.exit(0)
